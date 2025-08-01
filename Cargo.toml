@@ -1,0 +1,18 @@
+[package]
+name = "netwalk"
+version = "0.1.0"
+authors = ["tkuestner@users.noreply.github.com"]
+edition = "2024"
+description = "A clone of the Netwalk game made with Rust and egui"
+license = "MIT"
+readme = "README.md"
+categories = ["games"]
+
+[dependencies]
+eframe = "0.32"
+egui-phosphor = "0.10"
+image = "0.25"
+rand = "0.9"
+rand_distr = "0.5"
+strum = { version = "0.27", features = ["derive"] }
+thiserror = "2.0"
