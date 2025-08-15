@@ -1,7 +1,7 @@
-use eframe::egui;
+use eframe::{egui, Storage};
 
 use netwalk::assets::Assets;
-use netwalk::game::{Game, GameEvent};
+use netwalk::game::{Game, GameEvent, Settings};
 use netwalk::modals::{NewGameModal, NewGameModalEvent};
 use netwalk::puzzle::{self, Options};
 
@@ -21,6 +21,7 @@ fn main() -> eframe::Result {
 
 struct Application {
     assets: Assets,
+    settings: Settings,
     state: ApplicationState,
     new_game_modal: NewGameModal,
 }
@@ -28,6 +29,9 @@ struct Application {
 impl Application {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         cc.egui_ctx.set_theme(egui::Theme::Dark);
+        let settings = cc.storage
+            .map(|storage| {Settings::read(storage)})
+            .unwrap_or_default();
 
         // Increasing the pixel per point results in a larger font, but also larger game objects.
         // cc.egui_ctx.set_pixels_per_point(1.25);
@@ -45,6 +49,7 @@ impl Application {
 
         Application {
             assets,
+            settings,
             state: ApplicationState::ShowingNewGameModal,
             new_game_modal: NewGameModal::new(Options::default()),
         }
@@ -52,7 +57,7 @@ impl Application {
 
     fn start_new_game(&mut self, options: Options) {
         let puzzle = puzzle::Builder::new().with_options(options).build();
-        let game = Game::new(puzzle, self.assets.clone());
+        let game = Game::new(puzzle, self.assets.clone(), self.settings);
         self.state = ApplicationState::RunningGame(Box::new(game));
     }
 }
@@ -69,11 +74,14 @@ impl eframe::App for Application {
                     }
                 }
                 ApplicationState::RunningGame(game) => {
-                    if let Some(event) = game.update(ui) {
+                    for event in game.update(ui) {
                         match event {
                             GameEvent::Close => self.state = ApplicationState::ShowingNewGameModal,
                             GameEvent::NewGame => {
                                 self.state = ApplicationState::ShowingNewGameModal
+                            }
+                            GameEvent::SettingsChanged(settings) => {
+                                self.settings = settings;
                             }
                             _ => (),
                         }
@@ -81,6 +89,10 @@ impl eframe::App for Application {
                 }
             };
         });
+    }
+
+    fn save(&mut self, storage: &mut dyn Storage) {
+        self.settings.write(storage);
     }
 }
 

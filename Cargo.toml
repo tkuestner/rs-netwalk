@@ -9,7 +9,7 @@ readme = "README.md"
 categories = ["games"]
 
 [dependencies]
-eframe = "0.32"
+eframe = { version = "0.32", features = ["persistence"] }
 egui-phosphor = "0.10"
 image = "0.25"
 rand = "0.9"

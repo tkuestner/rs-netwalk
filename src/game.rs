@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use eframe::egui;
+use eframe::{egui, Storage};
 
 use crate::assets::{AssetType, Assets};
 use crate::grid::{Direction, Grid, Vec2};
@@ -18,14 +18,14 @@ pub struct Game {
     state: GameState,
     timer: Timer,
     move_counter: MoveCounter,
-    show_wrap_marker: bool,
+    settings: Settings,
 }
 
 impl Game {
     const INNER_MARGIN: f32 = 10.;
 
     /// Create a new game.
-    pub fn new(puzzle: Puzzle, assets: Assets) -> Self {
+    pub fn new(puzzle: Puzzle, assets: Assets, settings: Settings) -> Self {
         let rows = puzzle.grid().rows();
         let cols = puzzle.grid().cols();
         let starting_position = puzzle.clone();
@@ -41,7 +41,7 @@ impl Game {
             state: GameState::BeforeStart,
             timer: Timer::default(),
             move_counter: MoveCounter::default(),
-            show_wrap_marker: false,
+            settings,
         }
     }
 
@@ -106,24 +106,26 @@ impl Game {
         score.round() as u32
     }
 
-    pub fn update(&mut self, ui: &mut egui::Ui) -> Option<GameEvent> {
+    pub fn update(&mut self, ui: &mut egui::Ui) -> Vec<GameEvent> {
         if self.state == GameState::Running {
             self.timer.update(ui.input(|i| i.time));
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
         }
 
-        let mut event = ui
+        let mut events = ui
             .vertical_centered(|ui| {
                 self.update_game_board(ui);
                 ui.add_space(15.);
-                let event = self.update_status_bar(ui);
-                if event == Some(GameEvent::Pause) {
-                    self.state = GameState::Paused {
-                        game_was_started: self.state != GameState::BeforeStart,
-                    };
-                    self.timer.stop();
+                let events = self.update_status_bar(ui);
+                for event in &events {
+                    if event == &GameEvent::Pause {
+                        self.state = GameState::Paused {
+                            game_was_started: self.state != GameState::BeforeStart,
+                        };
+                        self.timer.stop();
+                    }
                 }
-                event
+                events
             })
             .inner;
 
@@ -139,7 +141,7 @@ impl Game {
                         self.state = GameState::BeforeStart;
                     }
                 }
-                Some(PauseModalEvent::NewGame) => return Some(GameEvent::NewGame),
+                Some(PauseModalEvent::NewGame) => events.push(GameEvent::NewGame),
                 Some(PauseModalEvent::Restart) => {
                     self.restart();
                 }
@@ -153,10 +155,11 @@ impl Game {
             )
             .update(ui);
             if let Some(PuzzleSolvedModalEvent::NewGame) = response {
-                event = Some(GameEvent::NewGame);
+                events.push(GameEvent::NewGame);
             }
         }
-        event
+
+        events
     }
 
     fn update_game_board(&mut self, ui: &mut egui::Ui) {
@@ -179,7 +182,8 @@ impl Game {
                 wall.draw(top_left, ui);
             }
 
-            if self.puzzle.options().wrapping && self.show_wrap_marker && let Some(hovered_tile) = hovered_tile {
+            if self.puzzle.options().wrapping && self.settings.show_wrap_marker &&
+                let Some(hovered_tile) = hovered_tile {
                 self.apply_wrap_markers(hovered_tile, top_left, ui);
             }
 
@@ -232,8 +236,8 @@ impl Game {
         (hovered_tile, modified_tile)
     }
 
-    fn update_status_bar(&mut self, ui: &mut egui::Ui) -> Option<GameEvent> {
-        let mut pause_game = false;
+    fn update_status_bar(&mut self, ui: &mut egui::Ui) -> Vec<GameEvent> {
+        let mut events = vec![];
         let board_size = self.puzzle.size();
         let desired_size =
             egui::Vec2::splat(board_size as f32 * TILE_SIZE + Self::INNER_MARGIN);
@@ -245,18 +249,19 @@ impl Game {
                     if ui.button(egui::RichText::new(
                         egui_phosphor::regular::DOTS_THREE_VERTICAL.to_string()).size(12.)).clicked()
                     {
-                        pause_game = true;
+                        events.push(GameEvent::Pause)
                     }
                     ui.label(format!("{}/{}", self.move_counter.get(), self.puzzle.expected_moves()));
                     ui.label(format!("{}", self.timer));
                 });
-                if self.puzzle.options().wrapping {
-                    ui.checkbox(&mut self.show_wrap_marker, "Show wrap marker");
+                if self.puzzle.options().wrapping &&
+                    ui.checkbox(&mut self.settings.show_wrap_marker, "Show wrap marker").clicked() {
+                        events.push(GameEvent::SettingsChanged(self.settings));
                 }
             })
-
         });
-        pause_game.then_some(GameEvent::Pause)
+
+        events
     }
 
     fn apply_wrap_markers(&mut self, hovered_tile: Vec2, top_left: egui::Vec2, ui: &mut egui::Ui) {
@@ -328,6 +333,26 @@ impl Game {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct Settings {
+    show_wrap_marker: bool,
+}
+
+impl Settings {
+    pub fn read(storage: &dyn Storage) -> Self {
+        let mut settings = Self::default();
+
+        if let Some(s) = storage.get_string("show_wrap_marker") &&
+            let Ok(value) = s.parse::<bool>() { settings.show_wrap_marker = value };
+
+        settings
+    }
+
+    pub fn write(&self, storage: &mut dyn Storage) {
+        storage.set_string("show_wrap_marker", self.show_wrap_marker.to_string());
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum GameState {
     BeforeStart,
@@ -342,6 +367,7 @@ pub enum GameEvent {
     Pause,
     NewGame,
     Restart,
+    SettingsChanged(Settings),
 }
 
 #[derive(Copy, Clone, Debug)]
