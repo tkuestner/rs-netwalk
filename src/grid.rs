@@ -87,34 +87,34 @@ impl<T> Grid<T> {
         }
     }
 
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<'_, T> {
         Iter {
             iter: self.data.iter(),
             indices_iter: self.indices_iter(),
         }
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<T> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
         let indices_iter = self.indices_iter();
         let iter = self.data.iter_mut();
         IterMut { iter, indices_iter }
     }
 
-    pub fn indexed_iter(&self) -> IndexedIter<T> {
+    pub fn indexed_iter(&self) -> IndexedIter<'_, T> {
         IndexedIter {
             iter: self.data.iter(),
             indices_iter: self.indices_iter(),
         }
     }
 
-    pub fn indexed_iter_mut(&mut self) -> IndexedIterMut<T> {
+    pub fn indexed_iter_mut(&mut self) -> IndexedIterMut<'_, T> {
         let indices_iter = self.indices_iter();
         let iter = self.data.iter_mut();
         IndexedIterMut { iter, indices_iter }
     }
 
     // Read-only indexed neighbors iterator
-    pub fn neighbors(&self, coord: Vec2) -> NeighborsIter<T> {
+    pub fn neighbors(&self, coord: Vec2) -> NeighborsIter<'_, T> {
         NeighborsIter {
             grid: self,
             center: coord,
